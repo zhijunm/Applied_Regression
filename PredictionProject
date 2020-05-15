@@ -1,0 +1,224 @@
+## Search for Windows administrative tools in the task bar
+## Go to ODBC Data Sources(64-bit), and go to add.
+install.packages("odbc")
+install.packages("RODBC")
+library(odbc)
+library(RODBC)
+db = odbcConnect("593",
+                 uid = "teamA6",
+                 pwd = "*****")
+df<-sqlQuery(db,"SELECT * FROM [dbo].[merged_student_performance_data]")
+View(df)
+
+
+library(caret)
+library(forecast)
+library(pROC)
+library(randomForest)
+# convert nummerical y into binomial and add new variables for the changes from period 1 to 3.
+df$g3_math <- as.factor(ifelse(df$G3 >=12,0,1))
+df$g3_por <- as.factor(ifelse (df$por_grade_3 >=12,0,1))
+df$G1 <- as.numeric(df$G1)
+df$G2 <- as.numeric(df$G2)
+df$por_grade_1 <- as.numeric(df$por_grade_1)
+df$por_grade_2 <- as.numeric(df$por_grade_2)
+df$chg_mean <- ((df$G3-df$G1)+(df$por_grade_3-df$por_grade_1))/2
+df$chg_total <-(df$G3-df$G1)+(df$por_grade_3-df$por_grade_1)
+str(df)
+df <- df[ , -c(31:36)]
+str(df)
+
+# Partition data
+set.seed(12)
+train.index <- sample(c(1:dim(df)[1]), dim(df)[1]*0.6)
+train.df <- df[train.index, ]
+valid.df <- df[-train.index, ]
+train.math <-train.df[ ,-c(32:34)]
+valid.math <- valid.df[ ,-c(32:34)]
+train.por <-train.df[ ,-c(31,33,34)]
+valid.por <- valid.df[ ,-c(31,33,34)]
+train.chg_mean <- train.df[ ,-c(31,32,34)]
+valid.chg_mean <- valid.df[ ,-c(31,32,34)]
+train.chg_total <- train.df[ ,-c(31,32,33)]
+valid.chg_total <- valid.df[ ,-c(31,32,33)]
+
+# run logistic regression
+# Model 1: with all the variables, AIC=296.76
+logit.math1 <- glm(g3_math ~ ., data = train.math, family="binomial") 
+options(scipen=999)
+summary(logit.math1)
+pred1 <- predict(logit.math1, valid.math[,-31], type="response")
+pred1
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred1>=0.2,1,0))) #0.6405
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred1>=0.3,1,0))) #0.6732
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred1>=0.4,1,0))) #0.6471
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred1>=0.5,1,0))) #0.634
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred1>=0.6,1,0))) #0.6144
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred1>=0.7,1,0))) #0.5882
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred1>=0.8,1,0))) #0.5621
+
+# Model 2: only with significant variables, AIC=276.21
+logit.math2 <- glm(g3_math ~ age+failures+schoolsup+absences, data = train.math, family="binomial")
+options(scipen=999)
+summary(logit.math2)
+pred2 <- predict(logit.math2, valid.math[,-31], type="response")
+pred2
+levels(valid.math$g3_math)
+levels(as.factor(ifelse(pred2>=0.3,1,0)))
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred2>=0.4,1,0))) #0.6928
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred2>=0.5,1,0))) #0.6797
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred2>=0.6,1,0))) #0.6209
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred2>=0.7,1,0))) #0.5882
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred2>=0.8,1,0))) #0.5425
+
+# Model 3: drop abesences, AIC=276.15
+logit.math3 <- glm(g3_math ~ age+failures+schoolsup, data = train.math, family="binomial")
+options(scipen=999)
+summary(logit.math3)
+pred3 <- predict(logit.math3, valid.math[,-31], type="response")
+pred3
+levels(valid.math$g3_math)
+levels(as.factor(ifelse(pred3>=0.3,1,0)))
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred3>=0.4,1,0))) #0.6732
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred3>=0.5,1,0))) #0.6536
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred3>=0.6,1,0))) #0.5882
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred3>=0.7,1,0))) #0.5752
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred3>=0.8,1,0))) #0.5294
+
+# Model 4: add absences,Medu,guardian,traveltime,higher,romantic, AIC=270.57
+logit.math4 <- glm(g3_math ~ age+failures+schoolsup+absences+Medu+guardian+traveltime+higher+romantic, data = train.math, family="binomial")
+options(scipen=999)
+summary(logit.math4)
+pred4 <- predict(logit.math4, valid.math[,-31], type="response")
+pred4
+levels(valid.math$g3_math)
+levels(as.factor(ifelse(pred4>=0.4,1,0)))
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred4>=0.4,1,0))) #0.6732
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred4>=0.5,1,0))) #0.634
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred4>=0.6,1,0))) #0.6031
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred4>=0.7,1,0))) #0.5948
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred4>=0.8,1,0))) #0.5621
+
+# Model 1 for por with all variables
+logit.por1 <- glm(g3_por ~ ., data = train.por, family="binomial") #AIC= 244.47
+options(scipen=999)
+summary(logit.por1)
+pred.por1 <- predict(logit.por1, valid.por[,-31], type="response")
+levels(as.factor(ifelse(pred.por1>=0.2,1,0)))
+confusionMatrix(as.factor(valid.por$g3_por),as.factor(ifelse(pred.por1>=0.4,1,0))) #0.6993
+confusionMatrix(as.factor(valid.por$g3_por),as.factor(ifelse(pred.por1>=0.5,1,0))) #0.7124
+confusionMatrix(as.factor(valid.por$g3_por),as.factor(ifelse(pred.por1>=0.6,1,0))) #0.7451
+confusionMatrix(as.factor(valid.por$g3_por),as.factor(ifelse(pred.por1>=0.7,1,0))) #0.7451
+confusionMatrix(as.factor(valid.por$g3_por),as.factor(ifelse(pred.por1>=0.8,1,0))) #0.7712
+
+# Model 2 for por, only keep significant variables  AIC=224.76
+logit.por2 <- glm(g3_por ~ school+sex+reason+failures+schoolsup+activities+absences, data = train.por, family="binomial") 
+options(scipen=999)
+summary(logit.por2)
+pred.por2 <- predict(logit.por2, valid.por[,-31], type="response")
+levels(as.factor(ifelse(pred.por2>=0.2,1,0)))
+confusionMatrix(as.factor(valid.por$g3_por),as.factor(ifelse(pred.por2>=0.4,1,0))) #0.7255
+confusionMatrix(as.factor(valid.por$g3_por),as.factor(ifelse(pred.por2>=0.5,1,0))) #0.7386
+confusionMatrix(as.factor(valid.por$g3_por),as.factor(ifelse(pred.por2>=0.6,1,0))) #0.7778
+confusionMatrix(as.factor(valid.por$g3_por),as.factor(ifelse(pred.por2>=0.7,1,0))) #0.7712
+confusionMatrix(as.factor(valid.por$g3_por),as.factor(ifelse(pred.por2>=0.8,1,0))) #0.7647
+
+# Model 1 for mean change (por and math)
+logit.chm1 <- glm(chg_mean ~ ., data = train.chg_mean) #AIC=1416.6
+options(scipen=999)
+summary(logit.chm1)
+pred.chm1 <- predict(logit.chm1, valid.chg_mean[,-31], type="response")
+all.residuals <- valid.chg_mean$chg_mean - pred.chm1
+data.frame("Predicted" = pred.chm1, "Actual" = valid.chg_mean$chg_mean,
+           "Residual" = all.residuals)
+accuracy(pred.chm1, valid.chg_mean$chg_mean) # RMSE=5.1587
+
+# Model 2 for mean change #AIC=1416.6
+logit.chm2 <- glm(chg_mean ~ Mjob+failures+schoolsup+higher, data = train.chg_mean) 
+options(scipen=999)
+summary(logit.chm2)
+pred.chm2 <- predict(logit.chm2, valid.chg_mean[,-31], type="response")
+min(valid.chg_mean$chg_mean)
+max(valid.chg_mean$chg_mean)
+all.residuals <- valid.chg_mean$chg_mean - pred.chm2
+
+data.frame("Predicted" = pred.chm2, "Actual" = valid.chg_mean$chg_mean,
+           "Residual" = all.residuals)
+accuracy(pred.chm2, valid.chg_mean$chg_mean) # RMSE=4.9576
+
+# Model 1 for total change (por+math)
+logit.cht1 <- glm(chg_total ~ ., data = train.chg_total) #AIC=1734.1
+options(scipen=999)
+summary(logit.cht1)
+pred.cht1 <- predict(logit.cht1, valid.chg_total[,-31], type="response")
+accuracy(pred.cht1, valid.chg_total$chg_total) # RMSE=10.3176
+
+# Model 2 for total change (por+math)
+logit.cht2 <- glm(chg_total ~ Mjob+failures+schoolsup+higher, data = train.chg_total) #AIC=1701.2
+options(scipen=999)
+summary(logit.cht2)
+pred.cht2 <- predict(logit.cht2, valid.chg_total[,-31], type="response")
+accuracy(pred.cht2, valid.chg_total$chg_total) # RMSE=9.9151
+
+
+#### FINAL MODELS
+# math model 2 with 0.4 cutoff has the best accuracy, use this model to predict math4 on the whole dataset
+logit.math2 <- glm(g3_math ~ age+failures+schoolsup+absences, data = train.math, family="binomial")
+options(scipen=999)
+summary(logit.math2)
+pred2 <- predict(logit.math2, valid.math[,-31], type="response")
+confusionMatrix(as.factor(valid.math$g3_math),as.factor(ifelse(pred2>=0.4,1,0))) 
+#                Reference
+# Prediction     0       1
+#          0     28      32
+#          1     15      78
+# Accuracy=0.6928, Sensitivity=0.6512, Specificity=0.7091
+# Recall=78/110=0.709
+# Precision=78/93=0.839, False positive=15
+
+train.math$newvalue <- ifelse(logit.math2$fitted.values>=0.4,1,0)
+par(pty="s")
+roc<-roc(train.math$g3_math, train.math$newvalue, plot=TRUE,legacy.axes=TRUE,percent=TRUE,
+         xlab="Specificity-False Positive Percentage",ylab="Sensitivity-True Positive Percentage",
+         col="#377eb8",lwd=4,print.auc=TRUE)
+
+# por model 2 with 0.6 cutoff has the best accuracy, use this model to predict por4 on the whole dataset
+logit.por2 <- glm(g3_por ~ school+sex+reason+failures+schoolsup+activities+absences, data = train.por, family="binomial") 
+options(scipen=999)
+summary(logit.por2)
+pred.por2 <- predict(logit.por2, valid.por[,-31], type="response")
+confusionMatrix(as.factor(valid.por$g3_por),as.factor(ifelse(pred.por2>=0.6,1,0))) #0.7778
+#              Reference
+# Prediction   0       1
+#          0   94      7
+#          1   27      25
+
+# Accuracy=0.7778, Sensitivity=0.7769, Specificity=0.7812
+# Recall=25/32=0.78125
+# Precision=25/52=0.481, False positive=27
+
+train.por$newvalue <-ifelse(logit.por2$fitted.values>=0.6,1,0)
+roc<-roc(train.por$g3_por,train.por$newvalue,plot=TRUE)
+#trim the two side parts, "s" is short for "square
+par(pty="s")
+roc<-roc(train.por$g3_por,train.por$newvalue,plot=TRUE,legacy.axes=TRUE,percent=TRUE,
+         xlab="Specificity-False Positive Percentage",ylab="Sensitivity-True Positive Percentage",
+         col="#377eb8",lwd=4,print.auc=TRUE)
+
+
+
+# Predict period 4 math score and identify the at-risk students
+math4 <- predict(logit.math2, df[,-c(31:34)], type="response")
+math4 <- data.frame(ifelse(math4>=0.4,1,0))
+names(math4)[1]<- c("math_grade_4")
+str(math4)
+# Predict period 4 portugese score and identify the at-risk students
+por4 <- predict(logit.por2, df[,-c(31:34)], type = "response")
+por4 <- data.frame(ifelse(por4>=0.6,1,0))
+names(por4)[1]<- c("por_grade_4")
+str(por4)
+
+# write the rediction result as a new csv
+predictdf <- cbind(df, math4, por4)
+str(predictdf)
+write.csv(predictdf, file="predictdf.csv", row.names=FALSE, na ="-9999")
